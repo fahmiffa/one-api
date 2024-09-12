@@ -1,4 +1,4 @@
-node_modules
-frontend
-public
-run.batgi
+/node_modules
+/frontend
+/public
+run.bat
