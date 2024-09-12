@@ -23,9 +23,9 @@ app.get('/', (req, res) => {
 });
 
 
-sequelize.sync().then(() => {
-  console.log("Database synced");
-});
+// sequelize.sync().then(() => {
+//   console.log("Database synced");
+// });
 
 
 const server = app.listen(port, () => {

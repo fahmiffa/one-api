@@ -206,6 +206,11 @@ router.get("/data", authMiddleware, async (req, res) => {
           as: "qeys",
           attributes: ['name','key'],
         },
+        {
+          model: Side,
+          as: "sides",
+          attributes: ['name','id'],
+        }
       ]
     });
     res.status(200).json({
@@ -656,13 +661,13 @@ router.post("/contest-seni", authMiddleware, async (req, res) => {
     if (Array.isArray(peserta)) {
       for (let index = 0; index < peserta.length; index++) {
         await Side.create({
-          contest: contest.id,
+          contestId: contest.id,
           name: peserta[index],
           type: 3,
         });
       }
     } else {
-      await Side.create({ contest: contest.id, name: peserta, type: 3 });
+      await Side.create({ contestId: contest.id, name: peserta, type: 3 });
     }
 
     res.status(201).json({
