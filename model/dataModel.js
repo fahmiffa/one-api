@@ -1,6 +1,370 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config");
 
+const Peserta = sequelize.define(
+  "peserta",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    kontingen: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    bb: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    gender: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "peserta",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+const Kelas = sequelize.define(
+  "Kelas",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "kelas",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+const Gelanggang = sequelize.define(
+  "gelanggang",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "gelanggang",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+const Level = sequelize.define(
+  "level",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "level",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+const Liga = sequelize.define(
+  "league",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "league",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+const Device = sequelize.define(
+  "device",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    kode: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "device",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+const Jon = sequelize.define(
+  "join",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    HeadId: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      allowNull: true,
+    },
+    peserta: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      allowNull: true,
+    },
+    sudut: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "join",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+Jon.belongsTo(Peserta, { foreignKey: "peserta", as: "user" });
+
+const Head = sequelize.define(
+  "head",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    ligaId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    kelasId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "head",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+Head.hasMany(Jon, {
+  foreignKey: "HeadId",
+  as: "join",
+});
+Head.belongsTo(Liga, {
+  foreignKey: "ligaId",
+  as: "liga",
+});
+Head.belongsTo(Kelas, {
+  foreignKey: "kelasId",
+  as: "kelas",
+});
+
+
+const Assign = sequelize.define(
+  "assign",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    ligaId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    pesertaId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    corn: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "assign",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
+Assign.belongsTo(Liga, {
+  foreignKey : "ligaId",
+  as : "liga"
+});
+
+Assign.belongsTo(Peserta, {
+  foreignKey : "pesertaId",
+  as : "peserta"
+});
+
+const Match = sequelize.define(
+  "match",
+  {
+    id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    ligaId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    nomor: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
+    event: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
+    jurus: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    timer: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    ver: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    status: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    point: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "match",
+    timestamps: true,
+    underscored: true,
+  }
+);
+
 const Contest = sequelize.define(
   "Contest",
   {
@@ -98,7 +462,7 @@ const Art = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
-    con: {
+    contestId: {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
@@ -230,9 +594,9 @@ const Qey = sequelize.define(
     },
   },
   {
-    tableName: "qeys", 
-    timestamps: true, 
-    underscored: true, 
+    tableName: "qeys",
+    timestamps: true,
+    underscored: true,
   }
 );
 
@@ -268,9 +632,9 @@ const Side = sequelize.define(
     },
   },
   {
-    tableName: "sides", 
-    timestamps: true, 
-    underscored: true, 
+    tableName: "sides",
+    timestamps: true,
+    underscored: true,
   }
 );
 
@@ -311,9 +675,9 @@ const Timer = sequelize.define(
     },
   },
   {
-    tableName: "timer", 
-    timestamps: true, 
-    underscored: true, 
+    tableName: "timer",
+    timestamps: true,
+    underscored: true,
   }
 );
 
@@ -341,7 +705,7 @@ const Summary = sequelize.define(
     type: {
       type: DataTypes.STRING(50),
       allowNull: true,
-      collate: "utf8mb4_unicode_ci", 
+      collate: "utf8mb4_unicode_ci",
     },
     createdAt: {
       type: DataTypes.DATE,
@@ -356,8 +720,8 @@ const Summary = sequelize.define(
   },
   {
     tableName: "summary",
-    timestamps: true, 
-    underscored: true, 
+    timestamps: true,
+    underscored: true,
     charset: "utf8mb4",
     collate: "utf8mb4_unicode_ci",
   }
@@ -407,38 +771,42 @@ const Value = sequelize.define(
   },
   {
     tableName: "values",
-    timestamps: false, 
+    timestamps: false,
     collate: "utf8mb4_unicode_ci",
-    underscored: true, 
+    underscored: true,
   }
 );
 
-const viewArt = sequelize.define('viewArt', {
-  con: {
-    type: DataTypes.INTEGER,
-    allowNull: false, 
-    field: 'con' 
+const viewArt = sequelize.define(
+  "viewArt",
+  {
+    con: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      field: "con",
+    },
+    CODE: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: "CODE",
+    },
+    points: {
+      type: DataTypes.DECIMAL(28, 2),
+      allowNull: true,
+      field: "points",
+    },
+    total: {
+      type: DataTypes.DECIMAL(30, 2),
+      allowNull: true,
+      field: "total",
+    },
   },
-  CODE: {
-    type: DataTypes.STRING(50),
-    allowNull: true, 
-    field: 'CODE'
-  },
-  points: {
-    type: DataTypes.DECIMAL(28, 2),
-    allowNull: true, 
-    field: 'points'
-  },
-  total: {
-    type: DataTypes.DECIMAL(30, 2),
-    allowNull: true, 
-    field: 'total'
+  {
+    tableName: "view_art",
+    timestamps: false,
+    freezeTableName: true,
   }
-}, {
-  tableName: 'view_art', 
-  timestamps: false, 
-  freezeTableName: true 
-});
+);
 
 Contest.hasMany(Side, {
   foreignKey: "contestId",
@@ -470,5 +838,34 @@ Qey.belongsTo(Contest, {
   as: "contest",
 });
 
+Contest.hasMany(Art, {
+  foreignKey: "contestId",
+  as: "arts",
+});
 
-module.exports = { Contest, Art, Qey, Side, Timer, Summary, Value, viewArt };
+Art.belongsTo(Contest, {
+  foreignKey: "contestId",
+  as: "contest",
+});
+
+module.exports = {
+  Contest,
+  Art,
+  Qey,
+  Side,
+  Timer,
+  Summary,
+  Value,
+  viewArt,
+  // new
+  Kelas,
+  Gelanggang,
+  Peserta,
+  Level,
+  Device,
+  Head,
+  Liga,
+  Jon,
+  Assign,
+  Match
+};

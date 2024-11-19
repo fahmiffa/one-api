@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
+const { Sequelize } = require("sequelize");
 const {
   Contest,
   Art,
@@ -10,9 +10,17 @@ const {
   Summary,
   Value,
   viewArt,
+  Kelas,
+  Gelanggang,
+  Peserta,
+  Device,
+  Liga,
+  Head,
+  Jon,
+  Assign,
 } = require("../model/dataModel");
 const { getUniqueQey, getUniqueTimer, getUniqueKey } = require("../Helper");
-const { where } = require("sequelize");
+const { where, INTEGER } = require("sequelize");
 const { type } = require("express/lib/response");
 
 const timeThreshold = 3000;
@@ -28,13 +36,13 @@ const authMiddleware = (req, res, next) => {
   if (authHeader && authHeader === "Bearer mysecrettoken") {
     next();
   } else {
-    res.status(401).json({ message: "Unauthorized" });
+    res.status(401).json({ statusCode: "41", message: "Unauthorized" });
   }
 };
 
 router.post("/art", authMiddleware, async (req, res) => {
   const { code, val, type, power } = req.body;
-  let art, end;
+  let art, end, beginPoint;
 
   try {
     if (!code) {
@@ -52,59 +60,81 @@ router.post("/art", authMiddleware, async (req, res) => {
     // juri
     const qey = await Qey.findOne({
       where: { key: code },
+      include: [{ model: Contest, as: "contest" }],
     });
-
     // dewan
     const contest = await Contest.findOne({
       where: { qey: code },
     });
+    const vals = type === "press" ? val : 0.0;
+    const powers = type === "power" ? val : 0.0;
 
     if (qey) {
-      art = await Art.findOne({
-        where: { code: code },
-        where: { con: qey.contestId },
-      });
-
-      const vals = type === "press" ? val : "0.00";
-      const powers = type === "power" ? val : "0.00";
+      const beginPoint = JSON.parse(JSON.stringify(qey.contest.point, null, 2));
 
       if (type === "press") {
-        art.val = vals;
-        art.power = powers;
-        await art.save();
-      } else {
         art = await Art.create({
-          con: qey.contestId,
+          contestId: qey.contestId,
           code: code,
           val: vals,
           power: powers,
           type: type,
         });
+      } else {
+        art = await Art.findOne({
+          where: { code: code, contestId: qey.contestId, type: type },
+        });
+
+        if (art) {
+          art.val = vals;
+          art.power = powers;
+          await art.save();
+        } else {
+          art = await Art.create({
+            contestId: qey.contestId,
+            code: code,
+            val: vals,
+            power: powers,
+            type: type,
+          });
+        }
       }
 
-      point = await viewArt.findAll({
-        attributes: ["points", "total"],
-        where: { code: art.code },
-        where: { con: art.con },
+      point = await Art.sum("val", {
+        where: { code: code, type: "press" },
       });
 
-      point = JSON.parse(JSON.stringify(point, null, 2));
-      end = point[0].points;
+      console.log(point);
+
+      end = beginPoint - point;
+      end = end.toFixed(2);
+
+      // point = await viewArt.findAll({
+      //   attributes: ["points", "total"],
+      //   where: { code: art.code },
+      //   where: { con: art.con },
+      // });
+
+      // point = JSON.parse(JSON.stringify(point, null, 2));
+      // end = point[0].points;
     } else if (contest) {
       art = await Art.findOne({
         where: { code: code },
         where: { type: type },
       });
+
+      console.log(art);
+
       if (art) {
         art.val = val;
-        art.power = power;
+        art.power = powers;
         await art.save();
       } else {
         art = await Art.create({
-          con: contest.id,
+          contestId: contest.id,
           code: code,
           val: val,
-          power: power,
+          power: powers,
           type: type,
         });
       }
@@ -117,7 +147,7 @@ router.post("/art", authMiddleware, async (req, res) => {
     res.status(201).json({
       statusCode: "00",
       message: "Data successfully",
-      data: art,
+      data: end,
     });
   } catch (error) {
     res.status(500).json({
@@ -204,18 +234,18 @@ router.get("/data", authMiddleware, async (req, res) => {
         {
           model: Qey,
           as: "qeys",
-          attributes: ['name','key'],
+          attributes: ["name", "key"],
         },
         {
           model: Side,
           as: "sides",
-          attributes: ['name','id'],
-        }
-      ]
+          attributes: ["name", "id"],
+        },
+      ],
     });
     res.status(200).json({
       statusCode: "00",
-      data : data
+      data: data,
     });
   } catch (error) {
     console.error("Error fetching data:", error);
@@ -252,11 +282,18 @@ router.post("/timer", authMiddleware, async (req, res) => {
         time: time,
       });
 
-      contest.status = status == "start" ? 1 : 0;
+      contest.move = status == "start" ? 1 : 0;
       await contest.save();
     } else {
       throw new Error("Invalid Code Access");
     }
+
+    timer = await Timer.findAll({
+      where: { key: code },
+      where: { status: "start" },
+    });
+
+    console.log(timer);
 
     res
       .status(201)
@@ -465,32 +502,54 @@ router.post("/point", authMiddleware, async (req, res) => {
 
 router.post("/auth", authMiddleware, async (req, res) => {
   const { code } = req.body;
-  let peserta = [];
+  let contest,
+    juri,
+    ass,
+    peserta = [];
 
   try {
     if (!code) {
       throw new Error("Code is required");
     }
 
-    const contest = await Contest.findOne({
+    contest = await Contest.findOne({
       where: { qey: code },
       include: [{ model: Side, as: "sides" }],
     });
-
-    peserta = JSON.parse(JSON.stringify(contest.sides, null, 2));
-
-    const juri = await Qey.findOne({
-      where: { key: code },
-      include: [{ model: Contest, as: "contest" }],
-    });
+    ass = "dewan";
 
     if (!contest) {
-      throw new Error("Invalid Code Access");
+      contest = await Contest.findOne({
+        where: { timer: code },
+        include: [{ model: Side, as: "sides" }],
+      });
+      ass = "timer";
+    }
+
+    if (!contest) {
+      juri = await Qey.findOne({
+        where: { key: code },
+        include: [
+          {
+            model: Contest,
+            as: "contest",
+
+            include: [{ model: Side, as: "sides" }],
+          },
+        ],
+      });
+
+      if (!juri) {
+        throw new Error("Invalid Code Access");
+      }
+      peserta = JSON.parse(JSON.stringify(juri.contest.sides, null, 2));
+    } else {
+      peserta = JSON.parse(JSON.stringify(contest.sides, null, 2));
     }
 
     da = {
       id: contest ? contest.id : juri.contest.id,
-      key: contest ? contest.qey : juri.key,
+      key: code,
       contest: contest ? contest.name : juri.contest.name,
       status: contest ? contest.status : juri.contest.status,
       point: contest ? contest.point : juri.contest.point,
@@ -498,7 +557,7 @@ router.post("/auth", authMiddleware, async (req, res) => {
       move: contest ? contest.move : juri.contest.move,
       ver: contest ? contest.ver : juri.contest.ver,
       type: contest ? contest.type : juri.contest.type,
-      name: contest ? "Dewan" : juri.name,
+      name: contest ? ass : juri.name,
       peserta: peserta.map((item) => item.name),
       side: peserta.map((item) => item.type),
     };
@@ -533,7 +592,7 @@ router.post("/contest-tanding", authMiddleware, async (req, res) => {
       qey: qey,
       timer: timer,
       type: "tanding",
-      var : "tanding",
+      var: "tanding",
       jurus: 0,
     });
 
@@ -571,7 +630,7 @@ router.post("/contest-tanding", authMiddleware, async (req, res) => {
 
     const contest = await Contest.create(data);
 
-    for (let index = 1; index < count+1; index++) {
+    for (let index = 1; index < count + 1; index++) {
       key = await getUniqueKey();
       par = { name: "juri " + index, key: key, contestId: contest.id };
       await Qey.create(par);
@@ -601,13 +660,27 @@ router.post("/contest-seni", authMiddleware, async (req, res) => {
     qey,
     timer,
     par,
+    point,
     errors = [];
 
   try {
+    const tipe = ["tunggal", "regu", "solo"];
+    if (tipe.includes(type)) {
+      point = 9.9;
+    } else {
+      point = 9.1;
+    }
+
     qey = await getUniqueQey();
     timer = await getUniqueTimer();
     data = req.body;
-    data = Object.assign(data, { qey: qey, timer: timer, type: "seni", var: type });
+    data = Object.assign(data, {
+      qey: qey,
+      timer: timer,
+      type: "seni",
+      var: type,
+      point: point,
+    });
 
     if (!name) {
       errors.push("name is requird");
@@ -688,9 +761,24 @@ router.delete("/delete/:id", authMiddleware, async (req, res) => {
   const { id } = req.params;
 
   try {
- 
     const contest = await Contest.destroy({
-      where : { id : id }
+      where: { id: id },
+    });
+
+    await Qey.destroy({
+      where: { contestId: id },
+    });
+
+    await Side.destroy({
+      where: { contestId: id },
+    });
+
+    await Art.destroy({
+      where: { contestId: id },
+    });
+
+    await Timer.destroy({
+      where: { contestId: id },
     });
 
     console.log(contest);
@@ -709,6 +797,637 @@ router.delete("/delete/:id", authMiddleware, async (req, res) => {
       message: error.message,
     });
   }
+});
+
+// kelas
+router.post("/kelas", authMiddleware, async (req, res) => {
+  let errors = [];
+
+  if (!req.body) {
+    errors.push("data is required");
+  }
+
+  try {
+    const { name } = req.body;
+
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    await Kelas.create({ name: name });
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data inserted successfully",
+      data: req.body,
+    });
+  } catch (error) {
+    res.status(errors.length > 0 ? 400 : 500).json({
+      statusCode: errors.length > 0 ? "04" : "05",
+      message: "Failed",
+      data: errors.length > 0 ? errors : error.message,
+    });
+  }
+});
+
+router.get("/kelas", authMiddleware, async (req, res) => {
+  const kelas = await Kelas.findAll();
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data inserted successfully",
+    data: kelas,
+  });
+});
+
+router.delete("/kelas/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const contest = await Kelas.destroy({
+      where: { id: id },
+    });
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data delete successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+router.put("/kelas/:id", authMiddleware, async (req, res) => {
+  let errors = [];
+  const id = parseInt(req.params.id);
+  const { name } = req.body;
+  try {
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    const kelas = await Kelas.findOne({ where: { id: id } });
+    kelas.name = name;
+    await kelas.save();
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data Update successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+// gelanggang
+
+router.post("/gelanggang", authMiddleware, async (req, res) => {
+  let errors = [];
+
+  if (!req.body) {
+    errors.push("data is required");
+  }
+
+  try {
+    const { name } = req.body;
+
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    await Gelanggang.create({ name: name });
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data inserted successfully",
+      data: req.body,
+    });
+  } catch (error) {
+    res.status(errors.length > 0 ? 400 : 500).json({
+      statusCode: errors.length > 0 ? "04" : "05",
+      message: "Failed",
+      data: errors.length > 0 ? errors : error.message,
+    });
+  }
+});
+
+router.get("/gelanggang", authMiddleware, async (req, res) => {
+  const item = await Gelanggang.findAll();
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data inserted successfully",
+    data: item,
+  });
+});
+
+router.delete("/gelanggang/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const contest = await Gelanggang.destroy({
+      where: { id: id },
+    });
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data delete successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+router.put("/gelanggang/:id", authMiddleware, async (req, res) => {
+  let errors = [];
+  const id = parseInt(req.params.id);
+  const { name } = req.body;
+  try {
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    const item = await Gelanggang.findOne({ where: { id: id } });
+    item.name = name;
+    await item.save();
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data Update successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+// peserta
+router.post("/peserta", authMiddleware, async (req, res) => {
+  let errors = [];
+
+  if (!req.body) {
+    errors.push("data is required");
+  }
+
+  try {
+    const { name, bb, gender, kontingen } = req.body;
+
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    await Peserta.create({
+      name: name,
+      bb: bb,
+      gender: gender,
+      kontingen: kontingen,
+    });
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data inserted successfully",
+      data: req.body,
+    });
+  } catch (error) {
+    res.status(errors.length > 0 ? 400 : 500).json({
+      statusCode: errors.length > 0 ? "04" : "05",
+      message: "Failed",
+      data: errors.length > 0 ? errors : error.message,
+    });
+  }
+});
+
+router.get("/peserta", authMiddleware, async (req, res) => {
+  const item = await Peserta.findAll({
+    attributes: [
+      [Sequelize.col("name"), "label"],
+      [Sequelize.col("id"), "value"],
+      "bb",
+      "kontingen",
+    ],
+  });
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data inserted successfully",
+    data: item,
+  });
+});
+
+router.delete("/peserta/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const contest = await Peserta.destroy({
+      where: { id: id },
+    });
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data delete successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+router.put("/peserta/:id", authMiddleware, async (req, res) => {
+  let errors = [];
+  const id = parseInt(req.params.id);
+  const { name, bb, gender, kontingen } = req.body;
+  try {
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    const item = await Peserta.findOne({ where: { id: id } });
+    item.name = name;
+    item.bb = bb;
+    item.gender = gender;
+    item.kontingen = kontingen;
+    await item.save();
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data Update successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+//device
+router.post("/device", authMiddleware, async (req, res) => {
+  let errors = [];
+
+  if (!req.body) {
+    errors.push("data is required");
+  }
+
+  try {
+    const { name, kode } = req.body;
+
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    if (!kode) {
+      errors.push("name is required");
+    }
+
+    await Device.create({ name: name, kode: kode });
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data inserted successfully",
+      data: req.body,
+    });
+  } catch (error) {
+    res.status(errors.length > 0 ? 400 : 500).json({
+      statusCode: errors.length > 0 ? "04" : "05",
+      message: "Failed",
+      data: errors.length > 0 ? errors : error.message,
+    });
+  }
+});
+
+router.get("/device", authMiddleware, async (req, res) => {
+  const item = await Device.findAll();
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data inserted successfully",
+    data: item,
+  });
+});
+
+router.put("/device/:id", authMiddleware, async (req, res) => {
+  let errors = [];
+  const id = parseInt(req.params.id);
+  const { name, kode } = req.body;
+  try {
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    const item = await Device.findOne({ where: { id: id } });
+    item.name = name;
+    item.kode = kode;
+    await item.save();
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data Update successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+router.delete("/device/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const contest = await Device.destroy({
+      where: { id: id },
+    });
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data delete successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+//liga
+router.post("/liga", authMiddleware, async (req, res) => {
+  let errors = [];
+
+  if (!req.body) {
+    errors.push("data is required");
+  }
+
+  try {
+    const { name } = req.body;
+
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    await Liga.create({ name: name });
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data inserted successfully",
+      data: req.body,
+    });
+  } catch (error) {
+    res.status(errors.length > 0 ? 400 : 500).json({
+      statusCode: errors.length > 0 ? "04" : "05",
+      message: "Failed",
+      data: errors.length > 0 ? errors : error.message,
+    });
+  }
+});
+
+router.get("/liga", authMiddleware, async (req, res) => {
+  const kelas = await Liga.findAll();
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data inserted successfully",
+    data: kelas,
+  });
+});
+
+router.delete("/liga/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const contest = await Liga.destroy({
+      where: { id: id },
+    });
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data delete successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+router.put("/liga/:id", authMiddleware, async (req, res) => {
+  let errors = [];
+  const id = parseInt(req.params.id);
+  const { name } = req.body;
+  try {
+    if (!name) {
+      errors.push("name is required");
+    }
+
+    const item = await Liga.findOne({ where: { id: id } });
+    item.name = name;
+    await item.save();
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data Update successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      statusCode: "05",
+      message: error.message,
+    });
+  }
+});
+
+// head
+router.post("/head", authMiddleware, async (req, res) => {
+  let head,
+    errors = [];
+
+  if (!req.body) {
+    errors.push("data is required");
+  }
+
+  const { kelas, red, blue, liga } = req.body;
+  try {
+    head = await Head.create({
+      kelasId: kelas,
+      ligaId: liga,
+    });
+
+    head = await head.save();
+
+    const base = head.id;
+
+    blue.map(async (item) => {
+      await Jon.create({
+        HeadId: base,
+        peserta: item.value,
+        sudut: 1,
+      });
+    });
+
+    red.map(async (item) => {
+      await Jon.create({
+        HeadId: base,
+        peserta: item.value,
+        sudut: 2,
+      });
+    });
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data inserted successfully",
+      data: head,
+    });
+  } catch (error) {
+    res.status(errors.length > 0 ? 400 : 500).json({
+      statusCode: errors.length > 0 ? "04" : "05",
+      message: "Failed",
+      data: errors.length > 0 ? errors : error.message,
+    });
+  }
+});
+
+router.get("/head", authMiddleware, async (req, res) => {
+  const kelas = await Head.findAll({
+    attributes: ["id"],
+    include: [
+      {
+        attributes: ["id", "peserta", "sudut"],
+        model: Jon,
+        as: "join",
+        include: [{ model: Peserta, as: "user", attributes: ["name"] }],
+      },
+      {
+        attributes: ["id", "name"],
+        model: Liga,
+        as: "liga",
+      },
+      {
+        attributes: ["id", "name"],
+        model: Kelas,
+        as: "kelas",
+      },
+    ],
+  });
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data successfully",
+    data: kelas,
+  });
+});
+
+router.put("/head/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { kelas, blue, red } = req.body;
+
+  const item = await Head.findOne({ where: { id: id } });
+
+  item.kelasId = kelas;
+  await item.save();  
+  const base = item.id;  
+  await Jon.destroy({where : { HeadId : item.id }});
+  blue.map(async (item) => {
+    await Jon.create({
+      HeadId: base,
+      peserta: item.value,
+      sudut: 1,
+    });
+  });
+
+  red.map(async (item) => {
+    await Jon.create({
+      HeadId: base,
+      peserta: item.value,
+      sudut: 2,
+    });
+  });
+
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data successfully",
+    data: item,
+  });
+});
+
+//assign
+router.post("/assign", authMiddleware, async (req, res) => {
+  let head,
+    errors = [];
+
+  if (!req.body) {
+    errors.push("data is required");
+  }
+
+  const { liga, red, blue } = req.body;
+  try {
+    const assign = await Assign.destroy({
+      where: {
+        ligaId: liga,
+      },
+    });
+
+    blue.map(async (item) => {
+      await Assign.create({
+        ligaId: liga,
+        pesertaId: item.value,
+        corn: 1,
+      });
+    });
+
+    red.map(async (item) => {
+      await Assign.create({
+        ligaId: liga,
+        pesertaId: item.value,
+        corn: 2,
+      });
+    });
+
+    res.status(201).json({
+      statusCode: "00",
+      message: "Data inserted successfully",
+      data: head,
+    });
+  } catch (error) {
+    res.status(errors.length > 0 ? 400 : 500).json({
+      statusCode: errors.length > 0 ? "04" : "05",
+      message: "Failed",
+      data: errors.length > 0 ? errors : error.message,
+    });
+  }
+});
+
+router.get("/assign/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const assign = await Assign.findAll({
+    where: { ligaId: id },
+    attributes: ["id", "corn"],
+    include: [
+      {
+        attributes: ["id", "name"],
+        model: Liga,
+        as: "liga",
+      },
+      {
+        attributes: ["id", "name"],
+        model: Peserta,
+        as: "peserta",
+      },
+    ],
+  });
+
+  const blue = assign
+    .filter((b) => b.corn == 1)
+    .map((item) => ({ value: item.peserta.id, label: item.peserta.name }));
+
+  const red = assign
+    .filter((r) => r.corn == 2)
+    .map((item) => ({ value: item.peserta.id, label: item.peserta.name }));
+
+  const rest = { blue: blue, red: red };
+
+  res.status(201).json({
+    statusCode: "00",
+    message: "Data successfully",
+    data: rest,
+  });
 });
 
 module.exports = router;
